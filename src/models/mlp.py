@@ -14,6 +14,13 @@ class MLP(nn.Module):
         :param hidden_dim: hidden layer's dimension. Must be specified if `n_hidden_layers > 0`.
         """
         super(MLP, self).__init__()
+        self.model_kwargs = dict(
+            source_emb_dim=source_emb_dim,
+            target_emb_dim=target_emb_dim,
+            n_hidden_layers=n_hidden_layers,
+            hidden_dim=hidden_dim,
+            model_class_name=self.__class__.__name__
+        )
         layers = []
 
         if n_hidden_layers == 0:

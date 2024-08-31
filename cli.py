@@ -1,6 +1,13 @@
+import json
+import os
+
+import torch
 import typer
+
+from src.models.mlp import MLP
 from src.train import train as train_func
 from src.dataset.create_emb_dataset import create_dataset as create_dataset_func
+from src.eval import evaluate_by_task
 
 app = typer.Typer()
 
@@ -55,6 +62,32 @@ def create_dataset(
         embedder_model_name=embedder_model_name,
         batch_size=batch_size,
     )
+
+
+@app.command()
+def evaluate(
+        task_name: str,
+        model_dir: str,  # e.g., `out/clip-to-e5--mock/`
+):
+
+    # Load
+    with open(os.path.join(model_dir, "metadata.json"), "r") as f:
+        metadata = json.load(f)
+
+    aligner_model = MLP(**metadata['model_kwargs'])  # TODO generalize the class with `model_class_name`
+    aligner_model.load_state_dict(torch.load(os.path.join(model_dir, "best_model.pt")))
+
+    # Evaluate
+    results = evaluate_by_task(
+        task_name=task_name,
+        target_emb_model_name=metadata['target_emb_model_name'],
+        source_emb_model_name=metadata['source_emb_model_name'],
+        aligner_model=aligner_model,
+    )
+
+    # Save the results
+    with open(os.path.join(model_dir, "eval_results.json"), "w") as f:
+        json.dump(results, f, indent=2)
 
 
 if __name__ == "__main__":

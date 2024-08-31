@@ -8,7 +8,7 @@ from tqdm import tqdm
 from pytorch_lightning.cli import ReduceLROnPlateau
 from torch.nn.utils import clip_grad_norm_
 
-from src.eval import eval_on_cifar_100
+from src.eval import evaluate_by_task
 from src.models.mlp import MLP
 import torch
 import datasets
@@ -62,6 +62,12 @@ def train(
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=len(train_dataloader) // 2, num_training_steps=n_epochs * len(train_dataloader)
     )
+
+    # create out_dir if not exists
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "metadata.json"), "w") as f:
+        json.dump(dict(dataset_metadata=dataset.get_metadata(), model_kwargs=model.model_kwargs),
+                  f, indent=2)
 
     # Initialize wandb
     cfg = {
@@ -160,28 +166,15 @@ def train(
     final_avg_val_loss = final_val_loss / len(val_dataloader)
     print(f"Final validation loss: {final_avg_val_loss:.8f}")
     final_results = dict(final_val_loss=final_avg_val_loss)
+
     # Evaluation of the final goal
-    if eval_on == 'cifar100':
-        acc_on_clip = eval_on_cifar_100(
-            text_encoder_model_name=target_emb_model_name,
-            batch_size=batch_size // 100
-        )
-        acc_on_source = eval_on_cifar_100(
-            text_encoder_model_name=source_emb_model_name,
-            batch_size=batch_size // 100
-        )
-        acc_on_source_w_aligned = eval_on_cifar_100(
-            text_encoder_model_name=target_emb_model_name,
-            aligner_model=model,
-            batch_size=batch_size // 100
-        )
-        final_results.update(
-            acc_on_clip=acc_on_clip,
-            acc_on_target=acc_on_source,
-            acc_on_target_w_aligned=acc_on_source_w_aligned
-        )
-    else:
-        raise ValueError(f"Unknown evaluation task: {eval_on}")
+    final_results.update(evaluate_by_task(
+        task_name=eval_on,
+        target_emb_model_name=target_emb_model_name,
+        source_emb_model_name=source_emb_model_name,
+        aligner_model=model,
+        batch_size=batch_size // 10,  # also actively runs the encoders
+    ))
 
     wandb.log(final_results)
     wandb.finish()
