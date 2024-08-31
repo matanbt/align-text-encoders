@@ -19,8 +19,9 @@ def train(
     eval_on,
 
     # training config:
+    out_dir: str = 'out',
     batch_size: int = 512,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 1e-2,
     n_epochs: int = 100,
     patience: int = 3,
     # clip_value: float = 1.0,
@@ -31,17 +32,19 @@ def train(
         text_dataset_name=text_dataset_name,
         source_emb_model_name=source_emb_model_name,
         target_emb_model_name=target_emb_model_name,
-        n_hidden_layers=n_hidden_layers,
+        n_hidden_layers=int(n_hidden_layers),
         eval_on=eval_on,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-        n_epochs=n_epochs,
-        patience=patience,
-        lr_patience=lr_patience,
-        lr_factor=lr_factor,
+        out_dir=out_dir,
+        batch_size=int(batch_size),
+        learning_rate=float(learning_rate),
+        n_epochs=int(n_epochs),
+        patience=int(patience),
+        lr_patience=int(lr_patience),
+        lr_factor=float(lr_factor),
     )
 
 
+@app.command()
 def create_dataset(
         text_dataset_name: str,
         embedder_model_name: str,

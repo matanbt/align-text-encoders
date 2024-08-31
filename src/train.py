@@ -1,3 +1,6 @@
+import json
+import os
+
 from transformers import get_linear_schedule_with_warmup
 
 import wandb
@@ -13,25 +16,26 @@ from src.dataset.create_emb_dataset import get_repo_id, SourceTargetEmbeddingDat
 
 
 def train(
-    # training setup
-    text_dataset_name: str,
-    source_emb_model_name: str,
-    target_emb_model_name: str,
+        # training setup
+        text_dataset_name: str,
+        source_emb_model_name: str,
+        target_emb_model_name: str,
 
-    # aligner setup
-    n_hidden_layers: int = 0,
+        # aligner setup
+        n_hidden_layers: int = 0,
 
-    # eval setup:
-    eval_on: str = 'cifar100',
+        # eval setup:
+        eval_on: str = 'cifar100',
 
-    # training config:
-    batch_size: int = 32,
-    learning_rate: float = 1e-4,
-    n_epochs: int = 100,
-    patience: int = 3,
-    # clip_value: float = 1.0,
-    lr_patience: int = 2,
-    lr_factor: float = 0.1,
+        # training config:
+        out_dir: str = 'out',
+        batch_size: int = 32,
+        learning_rate: float = 1e-4,
+        n_epochs: int = 100,
+        patience: int = 3,
+        # clip_value: float = 1.0,
+        lr_patience: int = 2,
+        lr_factor: float = 0.1,
 ):
     dataset = SourceTargetEmbeddingDataset(
         text_dataset_name=text_dataset_name,
@@ -60,11 +64,12 @@ def train(
     )
 
     # Initialize wandb
-    wandb.init(project="align-text-encoders", config={
+    cfg = {
         "text_dataset_name": text_dataset_name,
         "source_emb_model_name": source_emb_model_name,
         "target_emb_model_name": target_emb_model_name,
         "n_hidden_layers": n_hidden_layers,
+        "out_dir": out_dir,
         "eval_on": eval_on,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
@@ -73,7 +78,8 @@ def train(
         # "clip_value": clip_value,
         "lr_patience": lr_patience,
         "lr_factor": lr_factor
-    })
+    }
+    wandb.init(project="align-text-encoders", config=cfg)
 
     # Early stopping setup
     best_val_loss = float('inf')
@@ -85,11 +91,11 @@ def train(
         model.train()
         train_loss = 0.0
 
-        pbar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{n_epochs}")
+        pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}")
         for source_emb, target_emb in pbar:
             optimizer.zero_grad()
             pred_target_emb = model(source_emb)
-            loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)
+            loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)  # cosine?
             loss.backward()
 
             # Gradient clipping
@@ -133,7 +139,7 @@ def train(
             best_val_loss = avg_val_loss
             epochs_without_improvement = 0
             best_model_state = model.state_dict()
-            torch.save(best_model_state, "best_model.pt")
+            torch.save(best_model_state, os.path.join(out_dir, "best_model.pt"))
             print(f"New best model saved with validation loss: {best_val_loss:.8f}")
         else:
             epochs_without_improvement += 1
@@ -179,6 +185,10 @@ def train(
 
     wandb.log(final_results)
     wandb.finish()
+
+    # write results to a JSON file
+    with open(os.path.join(out_dir, "results.json"), "w") as f:
+        json.dump({'config': cfg, 'results': final_results}, f, indent=2)
 
 
 if __name__ == '__main__':

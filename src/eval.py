@@ -1,8 +1,4 @@
-import os
-import clip
 import torch
-from torchvision.datasets import CIFAR100
-from transformers import CLIPProcessor, CLIPModel, AutoTokenizer
 
 
 from sentence_transformers import SentenceTransformer, util

@@ -2,9 +2,8 @@ import torch
 import datasets
 import huggingface_hub
 from sentence_transformers import SentenceTransformer
-import logging
 import json
-
+import os
 
 def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.Dataset:
     if dataset_name == "scifact":
@@ -13,7 +12,7 @@ def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.D
         ds = ds['corpus']
     elif dataset_name == 'coco_captions':
         # loads text captions of `annotations_trainval2014` from COCO dataset
-        with open(r".\data\annotations_trainval2014\annotations\captions_train2014.json") as f:
+        with open(os.path.join('data', 'annotations_trainval2014', 'annotations', 'captions_train2014.json')) as f:
             captions_dict = json.load(f)['annotations']
         # create an huggingface dataset
         ds = datasets.Dataset.from_list(captions_dict)
@@ -70,7 +69,8 @@ def create_dataset(
     # Load the model
     model = SentenceTransformer(embedder_model_name)
     # Embed (uses SeT to tokenize->forward-pass the text)
-    dataset = dataset.map(lambda x: {'embedding': model.encode(x["text"], batch_size=batch_size)},
+    dataset = dataset.map(lambda x: {'embedding': model.encode(x["text"], batch_size=batch_size,
+                                                               normalize_embeddings=True)},
                           batched=True, batch_size=batch_size * 10)
     # Upload the dataset to the Hugging Face Hub
     dataset.push_to_hub(repo_id, private=True)
@@ -135,6 +135,7 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
 if __name__ == '__main__':
     create_dataset(
         text_dataset_name="coco_captions",
-        embedder_model_name="sentence-transformers/clip-ViT-L-14",
+        # embedder_model_name="sentence-transformers/clip-ViT-L-14",
+        embedder_model_name="intfloat/e5-base-v2",
         # embedder_model_name="sentence-transformers/all-MiniLM-L12-v2",
     )
