@@ -194,7 +194,7 @@ def train(
         target_emb_model_name=target_emb_model_name,
         source_emb_model_name=source_emb_model_name,
         aligner_model=model,
-        batch_size=batch_size // 10,  # also actively runs the encoders
+        batch_size=256,  # also actively runs the encoders
     ))
 
     wandb.log(final_results)

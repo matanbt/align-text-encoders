@@ -14,11 +14,14 @@ def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.D
         # loads text captions of `annotations_trainval2014` from COCO dataset
         with open(os.path.join('data', 'annotations_trainval2014', 'annotations', 'captions_train2014.json')) as f:
             captions_dict = json.load(f)['annotations']
-        # create an huggingface dataset
         ds = datasets.Dataset.from_list(captions_dict)
         ds = ds.rename_column('caption', 'text')
         ds = ds.rename_column('id', '_id')
         # TODO ensure ds has not training key or something
+    elif dataset_name == 'conc_captions':
+        ds = datasets.load_dataset("google-research-datasets/conceptual_captions", "unlabeled")['train']
+        ds = ds.rename_column('caption', 'text')
+        ds = ds.add_column('_id', list(range(len(ds))))  # create an id column, by enumerating the dataset
     else:
         raise NotImplementedError
     return ds
@@ -134,7 +137,8 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     create_dataset(
-        text_dataset_name="coco_captions",
+        # text_dataset_name="coco_captions",
+        text_dataset_name="conc_captions",
         # embedder_model_name="sentence-transformers/clip-ViT-L-14",
         embedder_model_name="intfloat/e5-base-v2",
         # embedder_model_name="sentence-transformers/all-MiniLM-L12-v2",
