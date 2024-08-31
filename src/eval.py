@@ -10,13 +10,14 @@ def eval_on_cifar_100(
         batch_size: int = 128):
     device = 'cuda'
 
-    model = SentenceTransformer('sentence-transformers/clip-ViT-L-14')
-    text_model = SentenceTransformer(text_encoder_model_name)
+    model = SentenceTransformer('sentence-transformers/clip-ViT-L-14', device=device)
+    text_model = SentenceTransformer(text_encoder_model_name, device=device)
+    aligner_model.to(device)
 
     # Download the dataset
     from datasets import load_dataset
     ds = load_dataset("uoft-cs/cifar100")['test']
-    ds = ds.select(range(n_limit)).with_format('torch')
+    ds = ds.select(range(n_limit))
     classes = ds.features['fine_label'].names
 
     # Encode classes
@@ -36,7 +37,7 @@ def eval_on_cifar_100(
         pred_labels = torch.argmax(cos_scores, dim=1)
 
         # aggregate for accuracy calculation
-        correct_predictions += (pred_labels == batch_classes).sum().item()
+        correct_predictions += (pred_labels.cpu() == batch_classes.cpu()).sum().item()
         total_samples += len(batch_classes)
 
         for img, pred, true in zip(batch_image, pred_labels, batch_classes):
@@ -53,6 +54,7 @@ def eval_on_cifar_100(
     return acc
 
 
+@torch.no_grad()
 def evaluate_by_task(
         task_name: str,
         target_emb_model_name: str,
@@ -70,14 +72,14 @@ def evaluate_by_task(
             batch_size=batch_size
         )
         acc_on_source_w_aligned = eval_on_cifar_100(
-            text_encoder_model_name=target_emb_model_name,
+            text_encoder_model_name=source_emb_model_name,
             aligner_model=aligner_model,
             batch_size=batch_size
         )
         results = dict(
             acc_on_clip=acc_on_clip,
-            acc_on_target=acc_on_source,
-            acc_on_target_w_aligned=acc_on_source_w_aligned
+            acc_on_source=acc_on_source,
+            acc_on_source_w_aligned=acc_on_source_w_aligned
         )
     else:
         raise ValueError(f"Unknown evaluation task: {task_name}")

@@ -5,7 +5,7 @@ import torch
 class MLP(nn.Module):
     def __init__(self, source_emb_dim: int, target_emb_dim: int,
                  n_hidden_layers: int = 0,
-                 hidden_dim: int = None):
+                 hidden_dim: int = None, **kwargs):
         """
 
         :param source_emb_dim: dimension of the source embedding to project

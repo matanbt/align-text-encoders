@@ -76,12 +76,13 @@ def evaluate(
 
     aligner_model = MLP(**metadata['model_kwargs'])  # TODO generalize the class with `model_class_name`
     aligner_model.load_state_dict(torch.load(os.path.join(model_dir, "best_model.pt")))
+    aligner_model.eval()
 
     # Evaluate
     results = evaluate_by_task(
         task_name=task_name,
-        target_emb_model_name=metadata['target_emb_model_name'],
-        source_emb_model_name=metadata['source_emb_model_name'],
+        target_emb_model_name=metadata['dataset_metadata']['target_emb_model_name'],
+        source_emb_model_name=metadata['dataset_metadata']['source_emb_model_name'],
         aligner_model=aligner_model,
     )
 

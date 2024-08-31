@@ -1,6 +1,7 @@
 import json
 import os
 
+from torch.optim import lr_scheduler
 from transformers import get_linear_schedule_with_warmup
 
 import wandb
@@ -59,9 +60,28 @@ def train(
     # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=lr_factor, patience=lr_patience,
     #                               monitor='val_loss',
     #                               verbose=True)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=len(train_dataloader) // 2, num_training_steps=n_epochs * len(train_dataloader)
-    )
+    # scheduler = get_linear_schedule_with_warmup(
+    #     optimizer, num_warmup_steps=3, num_training_steps=n_epochs * len(train_dataloader)
+    # )
+    def get_lr(_epoch):
+        warmup_iters = n_epochs // 20
+        # 1) linear warmup for warmup_iters steps
+        if _epoch < warmup_iters:
+            return learning_rate * (_epoch+1) / warmup_iters
+        return learning_rate
+        # Currently fancy logic is disabled TODO attempt
+        # # 2) if it > lr_decay_iters, return min learning rate
+        # if _epoch > lr_decay_iters:
+        #     return min_lr
+        # lr_decay_iters = n_epochs // 3
+        # min_lr = learning_rate // 10
+        # # 3) in between, use cosine decay down to min learning rate
+        # decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+        # assert 0 <= decay_ratio <= 1
+        # coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
+        # return min_lr + coeff * (learning_rate - min_lr)
+
+    scheduler = lr_scheduler.LambdaLR(optimizer, get_lr)
 
     # create out_dir if not exists
     os.makedirs(out_dir, exist_ok=True)
@@ -129,13 +149,14 @@ def train(
         avg_val_loss = val_loss / len(val_dataloader)
 
         # Step the LR scheduler
-        scheduler.step(avg_val_loss)
+        scheduler.step()  # avg_val_loss
 
         # Log to wandb
         wandb.log({
             "epoch": epoch,
             "train_loss": avg_train_loss,
-            "val_loss": avg_val_loss
+            "val_loss": avg_val_loss,
+            'lr': scheduler.get_last_lr()[-1],
         })
 
         # print(f"Epoch: {epoch + 1}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
@@ -180,8 +201,8 @@ def train(
     wandb.finish()
 
     # write results to a JSON file
-    with open(os.path.join(out_dir, "results.json"), "w") as f:
-        json.dump({'config': cfg, 'results': final_results}, f, indent=2)
+    with open(os.path.join(out_dir, "eval_results.json"), "w") as f:
+        json.dump(final_results, f, indent=2)
 
 
 if __name__ == '__main__':
