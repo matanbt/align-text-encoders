@@ -38,21 +38,31 @@ def train(
         lr_patience: int = 2,
         lr_factor: float = 0.1,
 ):
-    dataset = SourceTargetEmbeddingDataset(
+    train_dataset = SourceTargetEmbeddingDataset(
         text_dataset_name=text_dataset_name,
         source_emb_model_name=source_emb_model_name,
         target_emb_model_name=target_emb_model_name,
+        train=True,
     )
+    val_dataset = SourceTargetEmbeddingDataset(
+        text_dataset_name=text_dataset_name,
+        source_emb_model_name=source_emb_model_name,
+        target_emb_model_name=target_emb_model_name,
+        train=False,
+    )
+
+    # [ALTERNATIVE] Split the dataset into train and validation, in case no validation
     # make loader to train and eval (by splitting dataset)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    # train_size = int(0.8 * len(dataset))
+    # val_size = len(dataset) - train_size
+    # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model = MLP(source_emb_dim=dataset.get_metadata()['source_emb_dim'],
-                target_emb_dim=dataset.get_metadata()['target_emb_dim'],
-                hidden_dim=dataset.get_metadata()['target_emb_dim'] // 2,
+    model = MLP(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
+                target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
+                hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
                 n_hidden_layers=n_hidden_layers)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -86,7 +96,7 @@ def train(
     # create out_dir if not exists
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "metadata.json"), "w") as f:
-        json.dump(dict(dataset_metadata=dataset.get_metadata(), model_kwargs=model.model_kwargs),
+        json.dump(dict(dataset_metadata=train_dataset.get_metadata(), model_kwargs=model.model_kwargs),
                   f, indent=2)
 
     # Initialize wandb

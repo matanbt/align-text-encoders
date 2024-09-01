@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 import json
 import os
 
+
 def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.Dataset:
     if dataset_name == "scifact":
         # contains 'title' and 'text' columns
@@ -17,11 +18,20 @@ def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.D
         ds = datasets.Dataset.from_list(captions_dict)
         ds = ds.rename_column('caption', 'text')
         ds = ds.rename_column('id', '_id')
-        # TODO ensure ds has not training key or something
+
+        with open(os.path.join('data', 'annotations_trainval2014', 'annotations', 'captions_val2014.json')) as f:
+            captions_dict = json.load(f)['annotations']
+        val_ds = datasets.Dataset.from_list(captions_dict)
+        val_ds = val_ds.rename_column('caption', 'text')
+        val_ds = val_ds.rename_column('id', '_id')
+
+        # map each split to a dataset
+        ds = datasets.DatasetDict({'train': ds, 'validation': val_ds})
     elif dataset_name == 'conc_captions':
-        ds = datasets.load_dataset("google-research-datasets/conceptual_captions", "unlabeled")['train']
-        ds = ds.rename_column('caption', 'text')
-        ds = ds.add_column('_id', list(range(len(ds))))  # create an id column, by enumerating the dataset
+        ds = datasets.load_dataset("google-research-datasets/conceptual_captions", "unlabeled")
+        for split in ds.keys():
+            ds[split] = ds[split].rename_column('caption', 'text')
+            ds[split] = ds[split].add_column('_id', list(range(len(ds[split]))))    # create an id column, by enumerating the dataset
     else:
         raise NotImplementedError
     return ds
@@ -88,15 +98,18 @@ def create_dataset_from_vision_encoder(
 
 
 class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
-    def __init__(self, text_dataset_name: str, source_emb_model_name: str, target_emb_model_name: str):
+    def __init__(self,
+                 text_dataset_name: str, source_emb_model_name: str, target_emb_model_name: str,
+                 train: bool = True):
         self.text_dataset_name = text_dataset_name
         self.source_emb_model_name = source_emb_model_name
         self.target_emb_model_name = target_emb_model_name
+        self.split_name = 'train' if train else 'validation'
 
         # Load data from HuggingFace
         source_repo_id = get_repo_id(text_dataset_name, source_emb_model_name)
         source_dataset = datasets.load_dataset(source_repo_id)
-        source_dataset = (source_dataset['train']  #['corpus']  # TODO get rid of this 'corpus'
+        source_dataset = (source_dataset[self.split_name]
                           .sort("_id")  # ensures aligned order
                           .rename_column('embedding', 'emb_source')
                           .with_format('torch')
@@ -105,7 +118,7 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
 
         target_repo_id = get_repo_id(text_dataset_name, target_emb_model_name)
         target_dataset = datasets.load_dataset(target_repo_id)
-        target_dataset = (target_dataset['train']  #['corpus'] TODO
+        target_dataset = (target_dataset[self.split_name]
                           .sort("_id")  # ensures aligned order
                           .rename_column('embedding', 'emb_target')
                           .with_format('torch')
@@ -137,8 +150,8 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     create_dataset(
-        # text_dataset_name="coco_captions",
-        text_dataset_name="conc_captions",
+        text_dataset_name="coco_captions",
+        # text_dataset_name="conc_captions",
         # embedder_model_name="sentence-transformers/clip-ViT-L-14",
         embedder_model_name="intfloat/e5-base-v2",
         # embedder_model_name="sentence-transformers/all-MiniLM-L12-v2",
