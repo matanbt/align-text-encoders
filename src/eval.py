@@ -1,16 +1,20 @@
 import torch
 
 from sentence_transformers import SentenceTransformer, util
-
+"""
+Performs basic evaluation on the models (CIFAR100).
+Note: for extensive ones, we later use the `clip_benchmark` package.
+"""
 
 def eval_on_cifar_100(
         text_encoder_model_name: str = 'sentence-transformers/clip-ViT-L-14',  # defaults to CLIP's
         aligner_model: torch.nn.Module = torch.nn.Identity(),
-        n_limit: int = 1000,
+        n_limit: int = 5000,
         batch_size: int = 128):
     device = 'cuda'
 
-    model = SentenceTransformer('sentence-transformers/clip-ViT-L-14', device=device)
+    # TODO generalize to other multimodal models
+    model = SentenceTransformer('openai/clip-vit-large-patch14', device=device)
     text_model = SentenceTransformer(text_encoder_model_name, device=device)
     aligner_model.to(device)
 

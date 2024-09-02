@@ -12,8 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 from src.eval import evaluate_by_task
 from src.models.mlp import MLP
 import torch
-import datasets
-from src.dataset.create_emb_dataset import get_repo_id, SourceTargetEmbeddingDataset
+from src.dataset.create_emb_dataset import SourceTargetEmbeddingDataset
 
 
 def train(
@@ -64,7 +63,7 @@ def train(
                 target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
                 hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
                 n_hidden_layers=n_hidden_layers)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     # Add LR scheduler [TODO choose scheduler]
     # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=lr_factor, patience=lr_patience,

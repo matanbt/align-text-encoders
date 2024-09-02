@@ -55,13 +55,22 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
 
 
 def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Callable[[List[str]], torch.Tensor]:
-    if embedder_model_name == "openai/clip-vit-large-patch14":
+    if embedder_model_name.startswith("openai/clip"):  # e.g. `openai/clip-vit-large-patch14`
         from transformers import CLIPModel
         model = CLIPModel.from_pretrained(embedder_model_name)
         model.to(device)
         tokenizer = AutoTokenizer.from_pretrained(embedder_model_name, return_tensors="pt")
-        return lambda x: model.get_text_features(**tokenizer(x,  return_tensors='pt', padding=True).to(device))
-    else:
+
+        def embed_batch(batch):
+            inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt").to(device)
+            emb = model.get_text_features(**inputs)
+            emb = torch.nn.functional.normalize(emb, dim=-1)
+            return emb
+        return embed_batch
+    elif embedder_model_name == 'glove':
+        model = SentenceTransformer("average_word_embeddings_glove.6B.300d", device=device)
+        return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
+    else:  # assumes it's a text encoder, available in SentenceTransformers
         model = SentenceTransformer(embedder_model_name, device=device)
         return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
 

@@ -14,9 +14,10 @@
 export PYTHONPATH="$PWD"  # set the Python's path to the current path
 export HF_HOME="/home/sharifm/students/matanbentov"  # modify to home de-facto dir
 
-DATASET=coco_captions
+DATASET=coco_captions  # conc_captions
 EMB_MODEL="intfloat/e5-base-v2"
-#EMB_MODEL="sentence-transformers/clip-ViT-L-14"
-BATCH_SIZE=1024
+#EMB_MODEL="openai/clip-vit-large-patch14"
+BATCH_SIZE=512
+
 python cli.py create-dataset ${DATASET} ${EMB_MODEL}  \
     --batch-size ${BATCH_SIZE}
