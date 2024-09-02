@@ -1,3 +1,4 @@
+from functools import partial
 from typing import List, Callable
 
 import torch
@@ -11,10 +12,18 @@ from transformers import AutoTokenizer
 
 
 def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.Dataset:
+    # Textual datasets:
     if dataset_name == "scifact":
         # contains 'title' and 'text' columns
         ds = datasets.load_dataset("mteb/scifact", "corpus")
-        ds = ds['corpus']
+        ds = ds['corpus']  # TDO make sure `corpus` is not a key
+    elif dataset_name == 'nq-corpus':
+        ds = datasets.load_dataset("jxm/nq_corpus_dpr")
+        ds['validation'] = ds['dev']
+        del ds['dev']
+        for split in ds.keys():
+            ds[split] = ds[split].add_column('_id', list(range(len(ds[split]))))  # create an id column, by enumerating the dataset
+    # Image-caption datasets:
     elif dataset_name == 'coco_captions':
         # loads text captions of `annotations_trainval2014` from COCO dataset
         with open(os.path.join('data', 'annotations_trainval2014', 'annotations', 'captions_train2014.json')) as f:
@@ -47,6 +56,7 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
         "sentence-transformers/all-MiniLM-L6-v2": "minilm-l6",
         "sentence-transformers/all-MiniLM-L12-v2": "minilm-l12",
         'thenlper/gte-base': 'gte',
+        'sentence-transformers/gtr-t5-base': 'gtr-unnorm',
         'intfloat/e5-base-v2': 'e5',
         'sentence-transformers/clip-ViT-L-14': 'clip-text',
         'openai/clip-vit-large-patch14': 'clipl14-text',
@@ -67,7 +77,9 @@ def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Cal
             emb = torch.nn.functional.normalize(emb, dim=-1)
             return emb
         return embed_batch
-    elif embedder_model_name == 'glove':
+    elif embedder_model_name == 'sentence-transformers/gtr-t5-base':
+        return gtr_t5_enc_from_vec2text()
+    elif embedder_model_name == 'avg-glove-6B-300d':
         model = SentenceTransformer("average_word_embeddings_glove.6B.300d", device=device)
         return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
     else:  # assumes it's a text encoder, available in SentenceTransformers
@@ -169,6 +181,43 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
             'source_emb_dim': self.source_dataset[0]['emb_source'].shape[0],
             'target_emb_dim': self.target_dataset[0]['emb_target'].shape[0],
         }
+
+
+def gtr_t5_enc_from_vec2text():
+    """Simply GTR-T5-Base, but without the final normalization (L2), as used in Vec2Text."""
+    import torch
+    from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizer, PreTrainedModel
+
+    def mean_pool(
+            hidden_states: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        B, S, D = hidden_states.shape
+        unmasked_outputs = hidden_states * attention_mask[..., None]
+        pooled_outputs = unmasked_outputs.sum(dim=1) / attention_mask.sum(dim=1)[:, None]
+        assert pooled_outputs.shape == (B, D)
+        return pooled_outputs
+
+    def get_gtr_embeddings(text_list,
+                           encoder: PreTrainedModel,
+                           tokenizer: PreTrainedTokenizer) -> torch.Tensor:
+        inputs = tokenizer(text_list,
+                           return_tensors="pt",
+                           max_length=128,
+                           truncation=True,
+                           padding="max_length").to("cuda")
+
+        with torch.no_grad():
+            model_output = encoder(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+            hidden_state = model_output.last_hidden_state
+
+            embeddings = mean_pool(hidden_state, inputs['attention_mask'])
+
+        return embeddings
+
+    encoder = AutoModel.from_pretrained("sentence-transformers/gtr-t5-base").encoder.to("cuda")
+    tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/gtr-t5-base")
+
+    return partial(get_gtr_embeddings, encoder=encoder, tokenizer=tokenizer)
 
 
 if __name__ == '__main__':

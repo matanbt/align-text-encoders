@@ -14,14 +14,12 @@
 export PYTHONPATH="$PWD"  # set the Python's path to the current path
 export HF_HOME="/home/sharifm/students/matanbentov"  # modify to home de-facto dir
 
-# COCO:
+# >>>>>>>>>>>> GOAL 1: Align multi-modal
+### COCO:
 # DATASET=coco_captions
-# BATCH_SIZE=100_000
-
-# CONC:
+### CONC:
 DATASET=conc_captions
-BATCH_SIZE=50_000
-
+###
 TARGET_MODEL="openai/clip-vit-large-patch14"
 SOURCE_MODEL="intfloat/e5-base-v2"
 N_HIDDEN_LAYERS=0  # 0 for linear projection
@@ -29,6 +27,17 @@ EVAL_ON="cifar100"
 BATCH_SIZE=100_000
 OUT_DIR=out/clip-to-e5--linear4
 
+# >>>>> GOAL 2: Align for inversion
+DATASET=nq-corpus
+###
+TARGET_MODEL="sentence-transformers/gtr-t5-base"
+SOURCE_MODEL="intfloat/e5-base-v2"
+N_HIDDEN_LAYERS=0  # 0 for linear projection
+EVAL_ON="text_inversion"
+BATCH_SIZE=100_000
+OUT_DIR=out/gtr-to-e5--linear4
+
+# run training
 python cli.py train ${DATASET} ${SOURCE_MODEL} ${TARGET_MODEL} ${N_HIDDEN_LAYERS} ${EVAL_ON}  \
     --batch-size ${BATCH_SIZE} --out-dir ${OUT_DIR} --n-epochs 150 --learning-rate 0.05
 
