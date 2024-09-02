@@ -1,9 +1,13 @@
+from typing import List, Callable
+
 import torch
 import datasets
 import huggingface_hub
 from sentence_transformers import SentenceTransformer
 import json
 import os
+
+from transformers import AutoTokenizer
 
 
 def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.Dataset:
@@ -42,12 +46,24 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
         "sentence-transformers/all-mpnet-base-v2": "ampnet",
         "sentence-transformers/all-MiniLM-L6-v2": "minilm-l6",
         "sentence-transformers/all-MiniLM-L12-v2": "minilm-l12",
-        # "sentence-transformers/gtr-t": "gte-base-en-v1.5",
         'thenlper/gte-base': 'gte',
         'intfloat/e5-base-v2': 'e5',
         'sentence-transformers/clip-ViT-L-14': 'clip-text',
+        'openai/clip-vit-large-patch14': 'clipl14-text',
     }[embedder_model_name]
     return f"MatanBT/{text_dataset_name}__{model_short_name}"
+
+
+def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Callable[[List[str]], torch.Tensor]:
+    if embedder_model_name == "openai/clip-vit-large-patch14":
+        from transformers import CLIPModel
+        model = CLIPModel.from_pretrained(embedder_model_name)
+        model.to(device)
+        tokenizer = AutoTokenizer.from_pretrained(embedder_model_name, return_tensors="pt")
+        return lambda x: model.get_text_features(**tokenizer(x,  return_tensors='pt', padding=True).to(device))
+    else:
+        model = SentenceTransformer(embedder_model_name, device=device)
+        return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
 
 
 def create_dataset(
@@ -80,11 +96,9 @@ def create_dataset(
         dataset = dataset.select(range(n_passage_limit))
 
     # Load the model
-    model = SentenceTransformer(embedder_model_name)
-    # Embed (uses SeT to tokenize->forward-pass the text)
-    dataset = dataset.map(lambda x: {'embedding': model.encode(x["text"], batch_size=batch_size,
-                                                               normalize_embeddings=True)},
-                          batched=True, batch_size=batch_size * 10)
+    embed_batch = get_text_enc_function(embedder_model_name)
+    dataset = dataset.map(lambda x: {'embedding': embed_batch(x['text'])}, batched=True, batch_size=batch_size)
+
     # Upload the dataset to the Hugging Face Hub
     dataset.push_to_hub(repo_id, private=True)
     print(f"Dataset uploaded to Hugging Face Hub: {repo_id}, with {len(dataset)} samples.")
