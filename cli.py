@@ -30,7 +30,7 @@ def train(
     batch_size: int = 512,
     learning_rate: float = 1e-2,
     n_epochs: int = 100,
-    patience: int = 3,
+    patience: int = 5,
     # clip_value: float = 1.0,
     lr_patience: int = 2,
     lr_factor: float = 0.1,

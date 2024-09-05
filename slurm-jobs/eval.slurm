@@ -15,12 +15,20 @@ export PYTHONPATH="$PWD"  # set the Python's path to the current path
 export HF_HOME="/home/sharifm/students/matanbentov"  # modify to home de-facto dir
 
 
-
+# >>> Multi-Modal Eval:
 OUT_DIR="out/clip-to-e5--linear5/"
+# Classification:
 clip_benchmark eval --dataset cifar10 cifar100 imagenet1k --task zeroshot_classification --model source source+aligner target --pretrained NONE \
-  --model_type our_experimental_models  --model_cache_dir out/clip-to-e5--linear5/  \
+  --model_type our_experimental_models  --model_cache_dir "${OUT_DIR}"  \
    --output "${OUT_DIR}/benchmark_{dataset}_{model}_{task}.json" --batch_size 1024
+# Retrieval: # [crossmodal3600, flickr8k,  flickr30k]
+clip_benchmark eval --dataset mscoco_captions --task zeroshot_retrieval --model source source+aligner target --pretrained NONE \
+  --model_type our_experimental_models  --model_cache_dir ${OUT_DIR}  \
+   --output "${OUT_DIR}/benchmark_{dataset}_{model}_{task}.json" --batch_size 1024
+# Quick eval (internal impl.)
+python cli.py evaluate cifar100 ${OUT_DIR}
 
-# QUICK EVALUATION (internal impl.)
-#TASK_NAME=cifar100
-#python cli.py evaluate ${TASK_NAME} ${OUT_DIR}
+# --------------------------------------------------------------------------------
+# >> Vec2Text Eval:
+OUT_DIR="out/gtr-to-e5--linear21/"
+python cli.py evaluate text_inversion ${OUT_DIR}

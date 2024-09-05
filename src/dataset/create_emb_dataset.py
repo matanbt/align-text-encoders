@@ -222,9 +222,11 @@ def gtr_t5_enc_from_vec2text():
 
 if __name__ == '__main__':
     create_dataset(
-        text_dataset_name="coco_captions",
+        # text_dataset_name="conc_captions",
+        text_dataset_name="nq-corpus",
         # text_dataset_name="conc_captions",
         # embedder_model_name="sentence-transformers/clip-ViT-L-14",
+        # embedder_model_name="openai/clip-vit-large-patch14",
         embedder_model_name="intfloat/e5-base-v2",
         # embedder_model_name="sentence-transformers/all-MiniLM-L12-v2",
     )
