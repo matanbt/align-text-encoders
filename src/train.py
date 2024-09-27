@@ -5,13 +5,14 @@ from torch.optim import lr_scheduler
 from transformers import get_linear_schedule_with_warmup
 
 import wandb
+import torch
 from tqdm import tqdm
 from pytorch_lightning.cli import ReduceLROnPlateau
 from torch.nn.utils import clip_grad_norm_
 
 from src.eval import evaluate_by_task
 from src.models.mlp import MLP
-import torch
+from src.models.transformer import TransformerEncoderAligner
 from src.dataset.create_emb_dataset import SourceTargetEmbeddingDataset
 
 
@@ -21,8 +22,14 @@ def train(
         source_emb_model_name: str,
         target_emb_model_name: str,
 
-        # aligner setup
+        # aligner
+        aligner_type: str = 'mlp',  # 'mlp', 'transformer'
+
+        # [MLP] aligner setup
         n_hidden_layers: int = 0,
+
+        # [Transformer] aligner setup
+        num_blocks: int = 4,
 
         # eval setup:
         eval_on: str = 'cifar100',
@@ -59,10 +66,26 @@ def train(
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model = MLP(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
-                target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
-                hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
-                n_hidden_layers=n_hidden_layers)
+    if aligner_type == 'mlp':
+        model = MLP(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
+                    target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
+                    hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
+                    n_hidden_layers=n_hidden_layers)
+    elif aligner_type == 'transformer':
+        model = TransformerEncoderAligner(
+            source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
+            target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
+            hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
+            num_blocks=num_blocks,
+
+            # >> Default params:
+            # dropout_p=0.1,
+            # n_head=4,
+            # seq_len=4,
+        )
+    else:
+        raise ValueError(f"Unknown aligner type: {aligner_type}")
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     # Add LR scheduler [TODO choose scheduler]
@@ -104,6 +127,8 @@ def train(
         "source_emb_model_name": source_emb_model_name,
         "target_emb_model_name": target_emb_model_name,
         "n_hidden_layers": n_hidden_layers,
+        "aligner_type": aligner_type,
+        "num_blocks": num_blocks,
         "out_dir": out_dir,
         "eval_on": eval_on,
         "batch_size": batch_size,
@@ -219,6 +244,7 @@ if __name__ == '__main__':
     train(
         text_dataset_name='coco_captions',
         target_emb_model_name='sentence-transformers/clip-ViT-L-14',
-        source_emb_model_name='sentence-transformers/all-MiniLM-L12-v2',
-        eval_on='cifar100',
+        source_emb_model_name='intfloat/e5-base-v2',
+        eval_on='cifar10',
+        aligner_type='transformer',
     )

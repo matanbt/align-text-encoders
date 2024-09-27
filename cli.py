@@ -19,11 +19,17 @@ def train(
     source_emb_model_name: str,
     target_emb_model_name: str,
 
-    # aligner setup
-    n_hidden_layers,
+    # aligner
+    aligner_type: str = 'mlp',  # 'mlp', 'transformer'
+
+    # [MLP] aligner setup
+    n_hidden_layers: int = 0,
+
+    # [Transformer] aligner setup
+    num_blocks: int = 4,
 
     # eval setup:
-    eval_on,
+    eval_on: str = 'cifar100',
 
     # training config:
     out_dir: str = 'out',
@@ -42,6 +48,8 @@ def train(
         n_hidden_layers=int(n_hidden_layers),
         eval_on=eval_on,
         out_dir=out_dir,
+        aligner_type=aligner_type,
+        num_blocks=int(num_blocks),
         batch_size=int(batch_size),
         learning_rate=float(learning_rate),
         n_epochs=int(n_epochs),

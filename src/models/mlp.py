@@ -13,7 +13,7 @@ class MLP(nn.Module):
         :param n_hidden_layers: model's hidden layer count. `0` means linear projection.
         :param hidden_dim: hidden layer's dimension. Must be specified if `n_hidden_layers > 0`.
         """
-        super(MLP, self).__init__()
+        super().__init__()
         self.model_kwargs = dict(
             source_emb_dim=source_emb_dim,
             target_emb_dim=target_emb_dim,
