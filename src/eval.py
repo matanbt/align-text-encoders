@@ -88,6 +88,9 @@ def eval_on_text_inversion(
     text_lst = [t[:32 * 4] for t in text_lst]  # limit to roughly 32 tokens
     text_inv_pairs = []
 
+    # aggregate cosine to average:
+    cos_sum, tot = 0, 0
+
     # TODO add dataset slightly OOD (still - short text passages)
 
     for batch_text in torch.utils.data.DataLoader(text_lst, batch_size=batch_size):
@@ -111,6 +114,7 @@ def eval_on_text_inversion(
     # TODO add quantitative metrics: https://github.com/jxmorris12/vec2text/blob/f7e3219284a0c00bf3c0783be9aed44b521157d8/vec2text/trainers/base.py#L368
 
     return dict(text_pairs=text_inv_pairs, avg_cosine=cos_sum / tot)
+
 
 @torch.no_grad()
 def evaluate_by_task(

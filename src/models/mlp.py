@@ -2,9 +2,7 @@ from torch import nn
 import torch
 
 
-# class MLPAligner(nn.Module): # TODO rename
-
-class MLP(nn.Module):
+class MLPAligner(nn.Module):
     def __init__(self, source_emb_dim: int, target_emb_dim: int,
                  n_hidden_layers: int = 0,
                  hidden_dim: int = None, **kwargs):

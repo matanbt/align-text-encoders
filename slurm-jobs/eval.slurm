@@ -15,20 +15,22 @@ export PYTHONPATH="$PWD"  # set the Python's path to the current path
 export HF_HOME="/home/sharifm/students/matanbentov"  # modify to home de-facto dir
 
 
-# >>> Multi-Modal Eval:
-OUT_DIR="out/clip-to-e5--linear5/"
+# >>> Multi-Modal Eval: [follows https://github.com/LAION-AI/CLIP_benchmark/tree/main/benchmark#webdataset-evaluation-vtab-and-retrieval-datasets-mscoco-flickr8k-flickr30k]
+OUT_DIR="out/clip-to-e5--linear6/"
 # Classification:
 clip_benchmark eval --dataset cifar10 cifar100 imagenet1k --task zeroshot_classification --model source source+aligner target --pretrained NONE \
   --model_type our_experimental_models  --model_cache_dir "${OUT_DIR}"  \
-   --output "${OUT_DIR}/benchmark_{dataset}_{model}_{task}.json" --batch_size 1024
-# Retrieval: # [crossmodal3600, flickr8k,  flickr30k]
-clip_benchmark eval --dataset mscoco_captions --task zeroshot_retrieval --model source source+aligner target --pretrained NONE \
+  --output "${OUT_DIR}/benchmark_{dataset}_{model}_{task}.json" --batch_size 1024
+# Retrieval: # [mscoco_captions, crossmodal3600, flickr8k,  flickr30k]
+clip_benchmark eval --dataset wds/flickr8k wds/flickr30k wds/mscoco_captions \
+  --task zeroshot_retrieval --model source source+aligner target --pretrained NONE \
+  --dataset_root "https://huggingface.co/datasets/clip-benchmark/wds_{dataset_cleaned}/tree/main" \
   --model_type our_experimental_models  --model_cache_dir ${OUT_DIR}  \
    --output "${OUT_DIR}/benchmark_{dataset}_{model}_{task}.json" --batch_size 1024
-# Quick eval (internal impl.)
-python cli.py evaluate cifar100 ${OUT_DIR}
+# Quick eval (internal impl.) [DISABLED]
+# python cli.py evaluate cifar100 ${OUT_DIR}
 
 # --------------------------------------------------------------------------------
 # >> Vec2Text Eval:
-OUT_DIR="out/gtr-to-e5--linear21/"
-python cli.py evaluate text_inversion ${OUT_DIR}
+# OUT_DIR="out/gtr-to-e5--linear21/"
+# python cli.py evaluate text_inversion ${OUT_DIR}

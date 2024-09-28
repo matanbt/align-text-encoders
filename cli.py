@@ -4,7 +4,7 @@ import os
 import torch
 import typer
 
-from src.models.mlp import MLP
+from src.models import initialize_aligner_model
 from src.train import train as train_func
 from src.dataset.create_emb_dataset import create_dataset as create_dataset_func
 from src.eval import evaluate_by_task
@@ -82,7 +82,7 @@ def evaluate(
     with open(os.path.join(model_dir, "metadata.json"), "r") as f:
         metadata = json.load(f)
 
-    aligner_model = MLP(**metadata['model_kwargs'])  # TODO generalize the class with `model_class_name`
+    aligner_model = initialize_aligner_model(**metadata['model_kwargs'])
     aligner_model.load_state_dict(torch.load(os.path.join(model_dir, "best_model.pt")))
     aligner_model.eval()
 
