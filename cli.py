@@ -95,7 +95,7 @@ def evaluate(
     )
 
     # Save the results
-    with open(os.path.join(model_dir, "eval_results.json"), "w") as f:
+    with open(os.path.join(model_dir, f"eval_results_{task_name}.json"), "w") as f:
         json.dump(results, f, indent=2)
 
 

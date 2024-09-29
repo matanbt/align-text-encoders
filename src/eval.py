@@ -68,7 +68,8 @@ def eval_on_text_inversion(
         text_encoder_model_name: str = "sentence-transformers/gtr-t5-base",
         aligner_model: torch.nn.Module = torch.nn.Identity(),
         n_limit: int = 100,
-        batch_size: int = 128
+        batch_size: int = 128,
+        data_to_invert: str = 'nq',  # 'nq' for in-domain; 'msmarco' for slightly out-of-domain
 ):
     """attempts to invert the embedding using GTR-T5-base trainer inverter, from Vec2Text"""
     import vec2text
@@ -83,13 +84,18 @@ def eval_on_text_inversion(
     corrector = vec2text.load_pretrained_corrector("gtr-base")
 
     # Embed text to invert
-    ds = datasets.load_dataset("jxm/nq_corpus_dpr")
-    text_lst = ds['dev']['text'][:n_limit]
-    text_lst = [t[:32 * 4] for t in text_lst]  # limit to roughly 32 tokens
+    if data_to_invert == 'nq':
+        ds = datasets.load_dataset("jxm/nq_corpus_dpr")
+        text_lst = ds['dev']['text'][:n_limit]
+        text_lst = [t[:32 * 4] for t in text_lst]  # limit to roughly 32 tokens
+    elif data_to_invert == 'msmarco':
+        ds = datasets.load_dataset("Tevatron/msmarco-passage-corpus")
+        text_lst = ds['train']['text'][:n_limit]
+        text_lst = [t[:32 * 4] for t in text_lst]  # limit to roughly 32 tokens
     text_inv_pairs = []
 
     # aggregate cosine to average:
-    cos_sum, tot = 0, 0
+    cos_sims = []
 
     # TODO add dataset slightly OOD (still - short text passages)
 
@@ -99,21 +105,25 @@ def eval_on_text_inversion(
         inv_text = vec2text.invert_embeddings(
             embeddings=embeddings,
             corrector=corrector,
-            num_steps=20,
+            num_steps=50,
+            sequence_beam_width=4,
         )
         inv_emb = embed_func(inv_text)
-        cos_sims = torch.cosine_similarity(embed_func(batch_text).cuda(), inv_emb)
+        batch_cos_sims = torch.cosine_similarity(embed_func(batch_text).cuda(), inv_emb)
 
         for i, (text, inv_text) in enumerate(zip(batch_text, inv_text)):
             print(f"Original: {text} --> Inverted: {inv_text}")
             text_inv_pairs.append({"text": text, "inv_text": inv_text,
                                    "cosine": cos_sims[i].item()})
-        cos_sum += cos_sims.sum().item()
-        tot += len(cos_sims)
+        cos_sims.append(batch_cos_sims)
 
     # TODO add quantitative metrics: https://github.com/jxmorris12/vec2text/blob/f7e3219284a0c00bf3c0783be9aed44b521157d8/vec2text/trainers/base.py#L368
-
-    return dict(text_pairs=text_inv_pairs, avg_cosine=cos_sum / tot)
+    cos_sims = torch.cat(cos_sims)
+    return dict(
+        text_pairs=text_inv_pairs,
+        cosine_mean=cos_sims.mean().item(),
+        cosine_std=cos_sims.std().item()
+    )
 
 
 @torch.no_grad()
@@ -143,25 +153,33 @@ def evaluate_by_task(
             acc_on_source=acc_on_source,
             acc_on_source_w_aligned=acc_on_source_w_aligned
         )
-    elif task_name == 'text_inversion':
+    elif task_name.startswith('text_inversion__'):
+        data_to_invert = task_name.split('__')[1]
         results_target = eval_on_text_inversion(
             text_encoder_model_name=target_emb_model_name,
+            data_to_invert=data_to_invert,
             batch_size=batch_size
         )
         results_source = eval_on_text_inversion(
             text_encoder_model_name=source_emb_model_name,
+            data_to_invert=data_to_invert,
             batch_size=batch_size
         )
         results_source_w_aligned = eval_on_text_inversion(
             text_encoder_model_name=source_emb_model_name,
+            data_to_invert=data_to_invert,
             aligner_model=aligner_model,
             batch_size=batch_size
         )
         results = dict(
             pairs_of_target=results_target,
             pairs_of_source=results_source,
-            pairs_of_source_w_aligned=results_source_w_aligned
+            pairs_of_source_w_aligned=results_source_w_aligned,
+            data_to_invert=data_to_invert,
         )
+    elif task_name == 'sts':
+        # TODO measure the embedding quality
+        pass
     else:
         raise ValueError(f"Unknown evaluation task: {task_name}")
 

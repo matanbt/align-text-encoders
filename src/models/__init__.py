@@ -6,7 +6,7 @@ from src.models.transformer import TransformerEncoderAligner
 
 def initialize_aligner_model(model_class_name: str, **kwargs) -> torch.nn:
     if model_class_name in ['MLP', 'MLPAligner']:
-        return MLP(**kwargs)
+        return MLPAligner(**kwargs)
     elif model_class_name == 'TransformerEncoderAligner':
         return TransformerEncoderAligner(**kwargs)
 
