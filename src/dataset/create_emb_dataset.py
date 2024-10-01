@@ -61,6 +61,7 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
         'sentence-transformers/clip-ViT-L-14': 'clip-text',
         'openai/clip-vit-large-patch14': 'clipl14-text',
         'sentence-transformers/average_word_embeddings_glove.6B.300d': 'glove',
+        'Snowflake/snowflake-arctic-embed-m': 'arctic',
     }[embedder_model_name]
     return f"MatanBT/{text_dataset_name}__{model_short_name}"
 
