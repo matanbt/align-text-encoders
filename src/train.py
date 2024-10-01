@@ -11,7 +11,7 @@ from pytorch_lightning.cli import ReduceLROnPlateau
 from torch.nn.utils import clip_grad_norm_
 
 from src.eval import evaluate_by_task
-from src.models.mlp import MLP
+from src.models.mlp import MLPAligner
 from src.models.transformer import TransformerEncoderAligner
 from src.dataset.create_emb_dataset import SourceTargetEmbeddingDataset
 
@@ -67,7 +67,7 @@ def train(
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     if aligner_type == 'mlp':
-        model = MLP(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
+        model = MLPAligner(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
                     target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
                     hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
                     n_hidden_layers=n_hidden_layers)
@@ -89,6 +89,7 @@ def train(
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
     # Add LR scheduler [TODO choose scheduler]
+    # https://github.com/rmokady/CLIP_prefix_caption/blob/1ad805a844a62ab2e5480479aa021bccf0d4d12a/train.py#L303  ????
     # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=lr_factor, patience=lr_patience,
     #                               monitor='val_loss',
     #                               verbose=True)
@@ -114,6 +115,12 @@ def train(
         # return min_lr + coeff * (learning_rate - min_lr)
 
     scheduler = lr_scheduler.LambdaLR(optimizer, get_lr)
+
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=5,
+        num_training_steps=n_epochs
+    )
 
     # create out_dir if not exists
     os.makedirs(out_dir, exist_ok=True)
@@ -222,14 +229,14 @@ def train(
     print(f"Final validation loss: {final_avg_val_loss:.8f}")
     final_results = dict(final_val_loss=final_avg_val_loss)
 
-    # Evaluation of the final goal
-    final_results.update(evaluate_by_task(
-        task_name=eval_on,
-        target_emb_model_name=target_emb_model_name,
-        source_emb_model_name=source_emb_model_name,
-        aligner_model=model,
-        batch_size=256,  # also actively runs the encoders
-    ))
+    # Evaluation of the final goal [DISABLED; moved call to script]
+    # final_results.update(evaluate_by_task(
+    #     task_name=eval_on,
+    #     target_emb_model_name=target_emb_model_name,
+    #     source_emb_model_name=source_emb_model_name,
+    #     aligner_model=model,
+    #     batch_size=256,  # also actively runs the encoders
+    # ))
 
     wandb.log(final_results)
     wandb.finish()
