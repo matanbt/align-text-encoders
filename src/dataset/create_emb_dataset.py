@@ -12,11 +12,12 @@ from transformers import AutoTokenizer
 
 
 def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.Dataset:
+    """Returns dataset of text passages, with columns of 'text' and '_id'; split to 'train' and 'validation'."""
     # Textual datasets:
     if dataset_name == "scifact":
         # contains 'title' and 'text' columns
         ds = datasets.load_dataset("mteb/scifact", "corpus")
-        ds = ds['corpus']  # TDO make sure `corpus` is not a key
+        ds = ds['corpus']  # TODO make sure `corpus` is not a key
     elif dataset_name == 'nq-corpus':
         ds = datasets.load_dataset("jxm/nq_corpus_dpr")
         ds['validation'] = ds['dev']
@@ -81,9 +82,6 @@ def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Cal
         return embed_batch
     elif embedder_model_name == 'sentence-transformers/gtr-t5-base':
         return gtr_t5_enc_from_vec2text()
-    elif embedder_model_name == 'avg-glove-6B-300d':
-        model = SentenceTransformer("average_word_embeddings_glove.6B.300d", device=device)
-        return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
     else:  # assumes it's a text encoder, available in SentenceTransformers
         model = SentenceTransformer(embedder_model_name, device=device)
         return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
@@ -138,6 +136,7 @@ class SourceTargetEmbeddingDataset(torch.utils.data.Dataset):
     def __init__(self,
                  text_dataset_name: str, source_emb_model_name: str, target_emb_model_name: str,
                  train: bool = True):
+
         self.text_dataset_name = text_dataset_name
         self.source_emb_model_name = source_emb_model_name
         self.target_emb_model_name = target_emb_model_name

@@ -38,15 +38,12 @@ def train(
     n_epochs: int = 100,
     patience: int = 5,
     # clip_value: float = 1.0,
-    lr_patience: int = 2,
-    lr_factor: float = 0.1,
 ):
     train_func(
         text_dataset_name=text_dataset_name,
         source_emb_model_name=source_emb_model_name,
         target_emb_model_name=target_emb_model_name,
         n_hidden_layers=int(n_hidden_layers),
-        eval_on=eval_on,
         out_dir=out_dir,
         aligner_type=aligner_type,
         num_blocks=int(num_blocks),
@@ -54,8 +51,6 @@ def train(
         learning_rate=float(learning_rate),
         n_epochs=int(n_epochs),
         patience=int(patience),
-        lr_patience=int(lr_patience),
-        lr_factor=float(lr_factor),
     )
 
 
@@ -76,6 +71,7 @@ def create_dataset(
 def evaluate(
         task_name: str,
         model_dir: str,  # e.g., `out/clip-to-e5--mock/`
+        device: str = 'cuda',
 ):
 
     # Load
@@ -83,7 +79,8 @@ def evaluate(
         metadata = json.load(f)
 
     aligner_model = initialize_aligner_model(**metadata['model_kwargs'])
-    aligner_model.load_state_dict(torch.load(os.path.join(model_dir, "best_model.pt")))
+    aligner_model.load_state_dict(torch.load(os.path.join(model_dir, "best_model.pt"),
+                                             map_location=torch.device(device)))
     aligner_model.eval()
 
     # Evaluate

@@ -4,7 +4,7 @@
 #SBATCH --output=logs/mk-data.out # redirect stdout
 #SBATCH --error=logs/mk-data.err # redirect stderr
 #SBATCH --partition=gpu-sharifm   #killable #gpu-a100-killable  #killable  #studentbatch # (see resources section)
-#SBATCH --time=1300 # max time (minutes)
+#SBATCH --time=2000 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time's up
 #SBATCH --nodes=1 # number of machines
 #SBATCH --ntasks=1 # number of processes

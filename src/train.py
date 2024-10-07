@@ -31,19 +31,43 @@ def train(
         # [Transformer] aligner setup
         num_blocks: int = 4,
 
-        # eval setup:
-        eval_on: str = 'cifar100',
-
         # training config:
         out_dir: str = 'out',
         batch_size: int = 32,
         learning_rate: float = 1e-4,
         n_epochs: int = 100,
-        patience: int = 5,
-        # clip_value: float = 1.0,
-        lr_patience: int = 2,
-        lr_factor: float = 0.1,
+        patience: int = 30,
+        # clip_value: float = 1.0, # [DISABLED]
+
+        device: str = 'cuda',
 ):
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        print(f"Using CUDA device: {torch.cuda.current_device()}")
+        device = torch.device('cuda:0')
+    else:
+        device = torch.device('cpu')
+        print("CUDA is not available. Using CPU.")
+
+    # Initialize wandb
+    cfg = {
+        "text_dataset_name": text_dataset_name,
+        "source_emb_model_name": source_emb_model_name,
+        "target_emb_model_name": target_emb_model_name,
+        "n_hidden_layers": n_hidden_layers,
+        "aligner_type": aligner_type,
+        "num_blocks": num_blocks,
+        "out_dir": out_dir,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "n_epochs": n_epochs,
+        "patience": patience,
+        # "clip_value": clip_value,
+        "device": device,
+    }
+    wandb.init(project="align-text-encoders", config=cfg,
+               name=out_dir.split("/")[-1])
+
     train_dataset = SourceTargetEmbeddingDataset(
         text_dataset_name=text_dataset_name,
         source_emb_model_name=source_emb_model_name,
@@ -63,14 +87,14 @@ def train(
     # val_size = len(dataset) - train_size
     # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=12)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=12)
 
     if aligner_type == 'mlp':
         model = MLPAligner(source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
-                    target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
-                    hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
-                    n_hidden_layers=n_hidden_layers)
+                           target_emb_dim=train_dataset.get_metadata()['target_emb_dim'],
+                           hidden_dim=train_dataset.get_metadata()['target_emb_dim'] // 2,
+                           n_hidden_layers=n_hidden_layers)
     elif aligner_type == 'transformer':
         model = TransformerEncoderAligner(
             source_emb_dim=train_dataset.get_metadata()['source_emb_dim'],
@@ -86,39 +110,13 @@ def train(
     else:
         raise ValueError(f"Unknown aligner type: {aligner_type}")
 
+    model.to(device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    # Add LR scheduler [TODO choose scheduler]
-    # https://github.com/rmokady/CLIP_prefix_caption/blob/1ad805a844a62ab2e5480479aa021bccf0d4d12a/train.py#L303  ????
-    # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=lr_factor, patience=lr_patience,
-    #                               monitor='val_loss',
-    #                               verbose=True)
-    # scheduler = get_linear_schedule_with_warmup(
-    #     optimizer, num_warmup_steps=3, num_training_steps=n_epochs * len(train_dataloader)
-    # )
-    def get_lr(_epoch):
-        warmup_iters = n_epochs // 20
-        # 1) linear warmup for warmup_iters steps
-        if _epoch < warmup_iters:
-            return learning_rate * (_epoch+1) / warmup_iters
-        return learning_rate
-        # Currently fancy logic is disabled TODO attempt
-        # # 2) if it > lr_decay_iters, return min learning rate
-        # if _epoch > lr_decay_iters:
-        #     return min_lr
-        # lr_decay_iters = n_epochs // 3
-        # min_lr = learning_rate // 10
-        # # 3) in between, use cosine decay down to min learning rate
-        # decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
-        # assert 0 <= decay_ratio <= 1
-        # coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
-        # return min_lr + coeff * (learning_rate - min_lr)
-
-    scheduler = lr_scheduler.LambdaLR(optimizer, get_lr)
-
+    # LR scheduler
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
-        num_warmup_steps=5,
+        num_warmup_steps=3,
         num_training_steps=n_epochs
     )
 
@@ -127,26 +125,6 @@ def train(
     with open(os.path.join(out_dir, "metadata.json"), "w") as f:
         json.dump(dict(dataset_metadata=train_dataset.get_metadata(), model_kwargs=model.model_kwargs),
                   f, indent=2)
-
-    # Initialize wandb
-    cfg = {
-        "text_dataset_name": text_dataset_name,
-        "source_emb_model_name": source_emb_model_name,
-        "target_emb_model_name": target_emb_model_name,
-        "n_hidden_layers": n_hidden_layers,
-        "aligner_type": aligner_type,
-        "num_blocks": num_blocks,
-        "out_dir": out_dir,
-        "eval_on": eval_on,
-        "batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "n_epochs": n_epochs,
-        "patience": patience,
-        # "clip_value": clip_value,
-        "lr_patience": lr_patience,
-        "lr_factor": lr_factor
-    }
-    wandb.init(project="align-text-encoders", config=cfg)
 
     # Early stopping setup
     best_val_loss = float('inf')
@@ -160,13 +138,16 @@ def train(
 
         pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}")
         for source_emb, target_emb in pbar:
+            source_emb = source_emb.to(device)
+            target_emb = target_emb.to(device)
+
             optimizer.zero_grad()
             pred_target_emb = model(source_emb)
-            loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)  # cosine?
+            loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)
             loss.backward()
 
             # Gradient clipping
-            # clip_grad_norm_(model.parameters(), clip_value)  # TODO read and consider
+            # clip_grad_norm_(model.parameters(), clip_value)  # TODO consider
 
             optimizer.step()
             train_loss += loss.item()
@@ -183,6 +164,9 @@ def train(
         val_loss = 0.0
         with torch.no_grad():
             for source_emb, target_emb in val_dataloader:
+                source_emb = source_emb.to(device)
+                target_emb = target_emb.to(device)
+
                 pred_target_emb = model(source_emb)
                 loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)
                 val_loss += loss.item()
@@ -212,15 +196,19 @@ def train(
         else:
             epochs_without_improvement += 1
             if epochs_without_improvement >= patience:
-                print(f"Early stopping triggered after {epoch + 1} epochs")
+                print(f"Early stopping triggered after {epoch + 1} epochs, having {epochs_without_improvement} epochs w/o improvement")
                 break
 
     # Load best model for final evaluation
     model.load_state_dict(best_model_state)
+    model.to(device)
     model.eval()
     final_val_loss = 0.0
     with torch.no_grad():
         for source_emb, target_emb in val_dataloader:
+            source_emb = source_emb.to(device)
+            target_emb = target_emb.to(device)
+
             pred_target_emb = model(source_emb)
             loss = torch.nn.functional.mse_loss(pred_target_emb, target_emb)
             final_val_loss += loss.item()
@@ -228,15 +216,6 @@ def train(
     final_avg_val_loss = final_val_loss / len(val_dataloader)
     print(f"Final validation loss: {final_avg_val_loss:.8f}")
     final_results = dict(final_val_loss=final_avg_val_loss)
-
-    # Evaluation of the final goal [DISABLED; moved call to script]
-    # final_results.update(evaluate_by_task(
-    #     task_name=eval_on,
-    #     target_emb_model_name=target_emb_model_name,
-    #     source_emb_model_name=source_emb_model_name,
-    #     aligner_model=model,
-    #     batch_size=256,  # also actively runs the encoders
-    # ))
 
     wandb.log(final_results)
     wandb.finish()
@@ -252,6 +231,5 @@ if __name__ == '__main__':
         text_dataset_name='coco_captions',
         target_emb_model_name='sentence-transformers/clip-ViT-L-14',
         source_emb_model_name='intfloat/e5-base-v2',
-        eval_on='cifar10',
         aligner_type='transformer',
     )
