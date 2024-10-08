@@ -63,8 +63,25 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
         'openai/clip-vit-large-patch14': 'clipl14-text',
         'sentence-transformers/average_word_embeddings_glove.6B.300d': 'glove',
         'Snowflake/snowflake-arctic-embed-m': 'arctic',
+        'random_embeddings': 'random',
     }[embedder_model_name]
     return f"MatanBT/{text_dataset_name}__{model_short_name}"
+
+
+def set_instruct_prefix_if_needed(dataset: datasets.Dataset, model_name: str) -> datasets.Dataset:
+    """
+        Some embedding models work with a prefix instruction, e.g., 'query: ...'.
+        For these, we randomly place these prefix instructions in the 'text' column.
+
+        [CURRENTLY DISABLED; SHOULD BE ENABLED WHEN SUPPORTED IN OTHER PLACES IN THE CODE]
+    """
+    if model_name == 'intfloat/e5-base-v2':
+        # can be either 'passage: ..' or 'query: ..'; we randomly distribute them
+        import random
+        dataset = dataset.map(lambda x: {'text': (f"passage: {x['text']}" if random.random() < 0.5
+                                                              else f"query: {x['text']}")}
+                              )
+    return dataset
 
 
 def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Callable[[List[str]], torch.Tensor]:
@@ -82,6 +99,24 @@ def get_text_enc_function(embedder_model_name: str, device: str = 'cuda') -> Cal
         return embed_batch
     elif embedder_model_name == 'sentence-transformers/gtr-t5-base':
         return gtr_t5_enc_from_vec2text()
+    elif embedder_model_name == 'random_embeddings':
+        # forms a model with random (yet consistent) embeddings, based on BERT's tokenization
+        from transformers import BertTokenizer
+        emb_dim = 768
+        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+        # Build/load embedding matrix
+        if not os.path.exists(f'src/random_embeddings_{emb_dim}.pt'):
+            embedding_mat = torch.randn(tokenizer.vocab_size, emb_dim)
+            torch.save(embedding_mat, f'src/random_embeddings_{emb_dim}.pt')
+        embedding_mat = torch.load(f'src/random_embeddings_{emb_dim}.pt')
+
+        def embed_batch(batch):
+            inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+            embs = embedding_mat[inputs['input_ids']].mean(dim=1)  # average over tokens within each sequence (pooling)
+            embs = torch.nn.functional.normalize(embs, dim=-1)
+            return embs
+        return embed_batch
     else:  # assumes it's a text encoder, available in SentenceTransformers
         model = SentenceTransformer(embedder_model_name, device=device)
         return lambda x: model.encode(x, normalize_embeddings=True, convert_to_tensor=True)
@@ -111,6 +146,10 @@ def create_dataset(
 
     # Load the dataset
     dataset = load_passages_from_dataset(text_dataset_name)
+
+    # Add prefix instructions if needed
+    # [CURRENTLY DISABLED; SHOULD BE ENABLED WHEN SUPPORTED IN OTHER PLACES IN THE CODE, e.g., evaluation] [TODO]
+    # dataset = set_instruct_prefix_if_needed(dataset, embedder_model_name)
 
     # limit the embedded passages to a given limit
     if len(dataset) > n_passage_limit:
