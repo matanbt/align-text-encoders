@@ -89,6 +89,7 @@ def evaluate(
         target_emb_model_name=metadata['dataset_metadata']['target_emb_model_name'],
         source_emb_model_name=metadata['dataset_metadata']['source_emb_model_name'],
         aligner_model=aligner_model,
+        aligner_dir=model_dir,
     )
 
     # Save the results

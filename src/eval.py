@@ -76,9 +76,10 @@ def eval_on_sts():
 def eval_on_text_inversion(
         text_encoder_model_name: str = "sentence-transformers/gtr-t5-base",
         aligner_model: torch.nn.Module = torch.nn.Identity(),
-        n_limit: int = 100,  # TODO enlarge! (will take more time)
-        batch_size: int = 128,  # TODO increase with compute!
+        n_limit: int = 2500,
+        batch_size: int = 16,
         data_to_invert: str = 'nq',  # 'nq' for in-domain; 'msmarco' for slightly out-of-domain
+        trained_aligner_dir: str = None,
 ):
     """attempts to invert the embedding using GTR-T5-base trainer inverter, from Vec2Text"""
     import vec2text
@@ -90,7 +91,53 @@ def eval_on_text_inversion(
     aligner_model.cuda()
 
     # Load the inversion model
-    corrector = vec2text.load_pretrained_corrector("gtr-base")
+    # corrector = vec2text.load_pretrained_corrector("gtr-base")
+
+    if trained_aligner_dir is not None:  # we use the aligner (or the source)
+        aligner_mode = "identity" if isinstance(aligner_model, torch.nn.Identity) else "aligner"
+        inversion_model = vec2text.models.InversionModel.from_pretrained(
+            "jxm/gtr__nq__32",
+            # should correspond to the name in `model_utils.py -> load_embedder_and_tokenizer()`
+            embedder_model_name=f"CUSTOM-EMBEDDER___{trained_aligner_dir}___{aligner_mode}",#"my mock embedder name",
+        )
+        """
+        ```python
+                # The following should be added to `model_utils.py -> load_embedder_and_tokenizer()`,
+                # under `elif name.startswith("CUSTOM-EMBEDDER___"):`
+                  ############################################################
+            elif name.startswith("CUSTOM-EMBEDDER___"):
+                # The following should be added to `model_utils.py -> load_embedder_and_tokenizer()`,
+                # under `elif name.startswith("CUSTOM-EMBEDDER___"):`
+                _, trained_aligner_dir, aligner_mode = name.split("___")
+                import json
+                import os
+                with open(os.path.join(trained_aligner_dir, "metadata.json"), "r") as f:
+                    metadata = json.load(f)
+        
+                # Load the embedding model (to invert)
+                emb_model_name = metadata['dataset_metadata']['source_emb_model_name']
+                model = SentenceTransformer(emb_model_name, device=device)
+                tokenizer = model.tokenizer
+        
+                # Load trained aligner:
+                aligner_model = initialize_aligner_model(**metadata['model_kwargs'])
+                aligner_model.load_state_dict(torch.load(os.path.join(trained_aligner_dir, "best_model.pt"),
+                                                         map_location=torch.device('cuda')))
+                aligner_model.eval()
+                aligner_model.cuda()
+        
+                # add module to SeT (which inherits from nn.Sequential
+                if aligner_mode == 'aligner':
+                    model.append(aligner_model)
+        
+                # TODO add normalize?
+        #######################################################
+        ```
+        """
+    else:
+        inversion_model = vec2text.models.InversionModel.from_pretrained("jxm/gtr__nq__32")
+    model = vec2text.models.CorrectorEncoderModel.from_pretrained("jxm/gtr__nq__32__correct")
+    corrector = vec2text.load_corrector(inversion_model, model)
 
     # Embed text to invert
     if data_to_invert == 'nq':
@@ -262,6 +309,7 @@ def evaluate_by_task(
         target_emb_model_name: str,
         source_emb_model_name: str,
         aligner_model: torch.nn.Module,
+        aligner_dir: str,
         batch_size: int = 64,
 ):
     if task_name == 'cifar100':
@@ -288,23 +336,26 @@ def evaluate_by_task(
         results_target = eval_on_text_inversion(
             text_encoder_model_name=target_emb_model_name,
             data_to_invert=data_to_invert,
-            batch_size=batch_size
+            batch_size=batch_size,
+            trained_aligner_dir=None,  # keep it this way, so we don't load other model
         )
         # TODO run only if source model embedding dim == gtr's (768)
-        # results_source = eval_on_text_inversion(
-        #     text_encoder_model_name=source_emb_model_name,
-        #     data_to_invert=data_to_invert,
-        #     batch_size=batch_size
-        # )
+        results_source = eval_on_text_inversion(
+            text_encoder_model_name=source_emb_model_name,
+            data_to_invert=data_to_invert,
+            batch_size=batch_size,
+            trained_aligner_dir=aligner_dir
+        )
         results_source_w_aligned = eval_on_text_inversion(
             text_encoder_model_name=source_emb_model_name,
             data_to_invert=data_to_invert,
             aligner_model=aligner_model,
-            batch_size=batch_size
+            batch_size=batch_size,
+            trained_aligner_dir=aligner_dir
         )
         results = dict(
             pairs_of_target=results_target,
-            # pairs_of_source=results_source,  # TODO
+            pairs_of_source=results_source,  # TODO prevent misalignment
             pairs_of_source_w_aligned=results_source_w_aligned,
             data_to_invert=data_to_invert,
         )
