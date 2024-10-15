@@ -4,7 +4,7 @@
 #SBATCH --output=logs/tr-aligner.out # redirect stdout
 #SBATCH --error=logs/tr-aligner.err # redirect stderr
 #SBATCH --partition=gpu-sharifm   #killable #gpu-a100-killable  #killable  #studentbatch # (see resources section)
-#SBATCH --time=2500 # max time (minutes)
+#SBATCH --time=3500 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time's up
 #SBATCH --nodes=1 # number of machines
 #SBATCH --ntasks=1 # number of processes
@@ -31,7 +31,7 @@ BATCH_SIZE=250_000
 ### TRANSFORMER
 # ALIGNER_TYPE="transformer"
 # HPARAMS="--num-blocks 4"
-# LR=0.0001
+# LR=0.001
 # BATCH_SIZE=100_000
 
 # >>>>>>>>>>>> Align multi-modal

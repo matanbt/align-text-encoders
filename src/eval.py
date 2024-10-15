@@ -100,40 +100,7 @@ def eval_on_text_inversion(
             # should correspond to the name in `model_utils.py -> load_embedder_and_tokenizer()`
             embedder_model_name=f"CUSTOM-EMBEDDER___{trained_aligner_dir}___{aligner_mode}",#"my mock embedder name",
         )
-        """
-        ```python
-                # The following should be added to `model_utils.py -> load_embedder_and_tokenizer()`,
-                # under `elif name.startswith("CUSTOM-EMBEDDER___"):`
-                  ############################################################
-            elif name.startswith("CUSTOM-EMBEDDER___"):
-                # The following should be added to `model_utils.py -> load_embedder_and_tokenizer()`,
-                # under `elif name.startswith("CUSTOM-EMBEDDER___"):`
-                _, trained_aligner_dir, aligner_mode = name.split("___")
-                import json
-                import os
-                with open(os.path.join(trained_aligner_dir, "metadata.json"), "r") as f:
-                    metadata = json.load(f)
-        
-                # Load the embedding model (to invert)
-                emb_model_name = metadata['dataset_metadata']['source_emb_model_name']
-                model = SentenceTransformer(emb_model_name, device=device)
-                tokenizer = model.tokenizer
-        
-                # Load trained aligner:
-                aligner_model = initialize_aligner_model(**metadata['model_kwargs'])
-                aligner_model.load_state_dict(torch.load(os.path.join(trained_aligner_dir, "best_model.pt"),
-                                                         map_location=torch.device('cuda')))
-                aligner_model.eval()
-                aligner_model.cuda()
-        
-                # add module to SeT (which inherits from nn.Sequential
-                if aligner_mode == 'aligner':
-                    model.append(aligner_model)
-        
-                # TODO add normalize?
-        #######################################################
-        ```
-        """
+
     else:
         inversion_model = vec2text.models.InversionModel.from_pretrained("jxm/gtr__nq__32")
     model = vec2text.models.CorrectorEncoderModel.from_pretrained("jxm/gtr__nq__32__correct")
@@ -166,7 +133,7 @@ def eval_on_text_inversion(
         batch_inv_text = vec2text.invert_embeddings(
             embeddings=batch_embeddings,
             corrector=corrector,
-            num_steps=50,
+            num_steps=100,
             sequence_beam_width=4,
         )
         batch_inv_embeddings = aligner_model(embed_func(batch_inv_text).cuda())
@@ -275,6 +242,8 @@ def _calc_text_comparison_metrics(
     # Compute BLEU and ROUGE scores
     metric_bleu = evaluate.load("sacrebleu")
     metric_rouge = evaluate.load("rouge")
+    bertscore = evaluate.load("bertscore")
+
     bleu_results = np.array(
         [
             metric_bleu.compute(predictions=[p], references=[r])["score"]
@@ -286,17 +255,26 @@ def _calc_text_comparison_metrics(
         predictions=predictions_str, references=references_str
     )
 
+    bertscore_results = bertscore.compute(predictions=predictions_str, references=references_str, lang="en")
+    bertscore_results = np.array(bertscore_results['f1'])
+
     exact_matches = np.array(predictions_str) == np.array(references_str)
     gen_metrics = {
         "bleu_score": bleu_results.mean(),
         "bleu_score_sem": sem(bleu_results),
         "bleu_score_sd": bleu_results.std(),
+
         "rouge_score": rouge_result[
             "rouge1"
         ],  # ['rouge1', 'rouge2', 'rougeL', 'rougeLsum']
+
         "exact_match": exact_matches.mean(),
         "exact_match_sem": sem(exact_matches),
         "exact_match_sd": exact_matches.std(),
+
+        "bertscore_score": bertscore_results.mean(),
+        "bertscore_score_sem": sem(bertscore_results),
+        "bertscore_score_sd": bertscore_results.std(),
     }
 
     all_metrics = {**set_token_metrics, **gen_metrics}
@@ -333,12 +311,12 @@ def evaluate_by_task(
         )
     elif task_name.startswith('text_inversion__'):
         data_to_invert = task_name.split('__')[1]
-        results_target = eval_on_text_inversion(
-            text_encoder_model_name=target_emb_model_name,
-            data_to_invert=data_to_invert,
-            batch_size=batch_size,
-            trained_aligner_dir=None,  # keep it this way, so we don't load other model
-        )
+        # results_target = eval_on_text_inversion(
+        #     text_encoder_model_name=target_emb_model_name,
+        #     data_to_invert=data_to_invert,
+        #     batch_size=batch_size,
+        #     trained_aligner_dir=None,  # keep it this way, so we don't load other model
+        # )
         # TODO run only if source model embedding dim == gtr's (768)
         results_source = eval_on_text_inversion(
             text_encoder_model_name=source_emb_model_name,
@@ -354,7 +332,7 @@ def evaluate_by_task(
             trained_aligner_dir=aligner_dir
         )
         results = dict(
-            pairs_of_target=results_target,
+            # pairs_of_target=results_target,
             pairs_of_source=results_source,  # TODO prevent misalignment
             pairs_of_source_w_aligned=results_source_w_aligned,
             data_to_invert=data_to_invert,

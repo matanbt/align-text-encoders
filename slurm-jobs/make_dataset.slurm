@@ -14,11 +14,11 @@
 export PYTHONPATH="$PWD"  # set the Python's path to the current path
 export HF_HOME="/home/sharifm/students/matanbentov"  # modify to home de-facto dir
 
-DATASET=coco_captions  # coco_captions, conc_captions, nq-corpus
+DATASET=conc_captions  # conc_captions, coco_captions, nq-corpus
 # >> TARGETS: sentence-transformers/gtr-t5-base, openai/clip-vit-large-patch14
-# >> SOURCES: intfloat/e5-base-v2, sentence-transformers/average_word_embeddings_glove.6B.300d, sentence-transformers/all-MiniLM-L6-v2, nomic-ai/nomic-embed-text-v1, Snowflake/snowflake-arctic-embed-m
+# >> SOURCES: intfloat/e5-base-v2, sentence-transformers/average_word_embeddings_glove.6B.300d, sentence-transformers/all-MiniLM-L6-v2, nomic-ai/nomic-embed-text-v1, Snowflake/snowflake-arctic-embed-m, random_embeddings
 EMB_MODEL="intfloat/e5-base-v2"
-BATCH_SIZE=512
+BATCH_SIZE=1024
 
 python cli.py create-dataset ${DATASET} ${EMB_MODEL}  \
     --batch-size ${BATCH_SIZE}

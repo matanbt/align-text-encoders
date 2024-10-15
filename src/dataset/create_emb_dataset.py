@@ -51,7 +51,7 @@ def load_passages_from_dataset(dataset_name: str = "mteb/scifact") -> datasets.D
     return ds
 
 
-def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
+def get_repo_id(text_dataset_name: str, embedder_model_name: str, include_instruction: bool = False) -> str:
     model_short_name = {
         "sentence-transformers/all-mpnet-base-v2": "ampnet",
         "sentence-transformers/all-MiniLM-L6-v2": "minilm-l6",
@@ -59,12 +59,15 @@ def get_repo_id(text_dataset_name: str, embedder_model_name: str) -> str:
         'thenlper/gte-base': 'gte',
         'sentence-transformers/gtr-t5-base': 'gtr-unnorm',
         'intfloat/e5-base-v2': 'e5',
+        'intfloat/e5-base-v2__inst': 'e5-inst',
         'sentence-transformers/clip-ViT-L-14': 'clip-text',
         'openai/clip-vit-large-patch14': 'clipl14-text',
         'sentence-transformers/average_word_embeddings_glove.6B.300d': 'glove',
         'Snowflake/snowflake-arctic-embed-m': 'arctic',
         'random_embeddings': 'random',
     }[embedder_model_name]
+    if include_instruction:
+        model_short_name += '__inst'
     return f"MatanBT/{text_dataset_name}__{model_short_name}"
 
 
@@ -128,12 +131,13 @@ def create_dataset(
         n_passage_limit: int = torch.inf,  # DEBUG TODO comment
         skip_if_repo_exists: bool = False,
         batch_size=256,
+        include_instruction: bool = False,
 ):
     """
     Creates a dataset with a column of 'text' and a column of (the corresponding) 'embedding',
     then it uploads to the Hugging Face Hub.
     """
-    repo_id = get_repo_id(text_dataset_name, embedder_model_name)
+    repo_id = get_repo_id(text_dataset_name, embedder_model_name, include_instruction=include_instruction)
 
     # Check if dataset exists in HuggingFace hub
     if skip_if_repo_exists:
@@ -148,8 +152,8 @@ def create_dataset(
     dataset = load_passages_from_dataset(text_dataset_name)
 
     # Add prefix instructions if needed
-    # [CURRENTLY DISABLED; SHOULD BE ENABLED WHEN SUPPORTED IN OTHER PLACES IN THE CODE, e.g., evaluation] [TODO]
-    # dataset = set_instruct_prefix_if_needed(dataset, embedder_model_name)
+    if include_instruction:
+        dataset = set_instruct_prefix_if_needed(dataset, embedder_model_name)
 
     # limit the embedded passages to a given limit
     if len(dataset) > n_passage_limit:

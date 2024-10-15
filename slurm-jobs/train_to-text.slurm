@@ -1,11 +1,11 @@
 #! /bin/sh
 
 #SBATCH --job-name=tr-aligner
-#SBATCH --output=logs/tr-aligner.out # redirect stdout
-#SBATCH --error=logs/tr-aligner.err # redirect stderr
+#SBATCH --output=logs/tr-aligner-t.out # redirect stdout
+#SBATCH --error=logs/tr-aligner-t.err # redirect stderr
 #SBATCH --partition=gpu-sharifm   #killable #gpu-a100-killable  #killable  #studentbatch # (see resources section)
 #SBATCH --nodelist=n-602  # n-{602,804}
-#SBATCH --time=2500 # max time (minutes)
+#SBATCH --time=3500 # max time (minutes)
 #SBATCH --signal=USR1@120 # how to end job when time's up
 #SBATCH --nodes=1 # number of machines
 #SBATCH --ntasks=1 # number of processes
@@ -32,7 +32,7 @@ BATCH_SIZE=250_000
 ### TRANSFORMER
 # ALIGNER_TYPE="transformer"
 # HPARAMS="--num-blocks 4"
-# LR=0.0001
+# LR=0.001
 # BATCH_SIZE=100_000
 
 
@@ -42,8 +42,7 @@ DATASET=nq-corpus
 TARGET_MODEL="sentence-transformers/gtr-t5-base"
 SOURCE_MODEL="intfloat/e5-base-v2"
 EVAL_ON="text_inversion"
-BATCH_SIZE=400_000
-OUT_DIR=out/gtr-to-e5--linear21
+OUT_DIR=out/gtr-to-e5--linear
 
 ### Cross embedding
 TARGET_MODEL="sentence-transformers/all-MiniLM-L6-v2" # align to
@@ -60,4 +59,4 @@ python cli.py train ${DATASET} ${SOURCE_MODEL} ${TARGET_MODEL}  \
 
 # >>>>>>>>>>>> EVAL:
 python cli.py evaluate text_inversion__nq ${OUT_DIR}
-python cli.py evaluate text_inversion__msmarco ${OUT_DIR}
+#python cli.py evaluate text_inversion__msmarco ${OUT_DIR}
