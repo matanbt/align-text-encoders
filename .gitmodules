@@ -1,3 +1,6 @@
 [submodule "CLIP_benchmark"]
 	path = CLIP_benchmark
-	url = https://github.com/LAION-AI/CLIP_benchmark.git
+	url = https://github.com/matanbt/CLIP_benchmark.git
+[submodule "vec2text"]
+	path = vec2text
+	url = https://github.com/matanbt/vec2text.git
